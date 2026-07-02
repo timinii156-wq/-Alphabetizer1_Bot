@@ -1,6 +1,13 @@
 import os
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, CallbackQueryHandler, MessageHandler, filters
+import logging
+from telegram import Update
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters, CallbackQueryHandler
+
+# Setup basic logging to see exactly what's happening
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
 
 # Sorting Logic
 def sort_list(text, reverse=False):
@@ -8,16 +15,16 @@ def sort_list(text, reverse=False):
     sorted_lines = sorted(lines, key=str.lower, reverse=reverse)
     return "\n".join(sorted_lines)
 
-# Command: /start - Shows instructions
+# Command: /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Send me a list (one item per line), and I'll give you sorting buttons!")
+    await update.message.reply_text("Hello! Send me a list and I'll give you sorting buttons.")
 
-# Handle plain text messages (the list)
+# Handler for incoming lists
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
-    # Save the text in user_data so we can sort it when they click a button
     context.user_data['last_list'] = user_text
     
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
     keyboard = [
         [InlineKeyboardButton("Sort A-Z", callback_data='az'),
          InlineKeyboardButton("Sort Z-A", callback_data='za')]
@@ -25,30 +32,35 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text("List received! How would you like to sort it?", reply_markup=reply_markup)
 
-# Handle button clicks
+# Handler for buttons
 async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
     user_list = context.user_data.get('last_list')
     if not user_list:
-        await query.edit_message_text("List expired. Please send it again.")
+        await query.edit_message_text("List expired. Send it again.")
         return
 
-    if query.data == 'az':
-        result = sort_list(user_list, reverse=False)
-        await query.edit_message_text(f"Sorted (A-Z):\n\n{result}")
-    elif query.data == 'za':
-        result = sort_list(user_list, reverse=True)
-        await query.edit_message_text(f"Sorted (Z-A):\n\n{result}")
+    reverse_sort = (query.data == 'za')
+    result = sort_list(user_list, reverse=reverse_sort)
+    await query.edit_message_text(f"Sorted:\n\n{result}")
+
+# Error Handler
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
+    logging.error(f"Update {update} caused error {context.error}")
 
 if __name__ == '__main__':
     token = os.getenv("TELEGRAM_TOKEN")
-    app = ApplicationBuilder().token(token).build()
-
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    app.add_handler(CallbackQueryHandler(button_click))
-    
-    print("Bot is running...")
-    app.run_polling()
+    if not token:
+        print("ERROR: TELEGRAM_TOKEN not set!")
+    else:
+        app = ApplicationBuilder().token(token).build()
+        
+        app.add_handler(CommandHandler("start", start))
+        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+        app.add_handler(CallbackQueryHandler(button_click))
+        app.add_error_handler(error_handler) # This stops the crashing
+        
+        print("Bot is running...")
+        app.run_polling()
