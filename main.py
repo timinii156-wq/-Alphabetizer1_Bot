@@ -52,10 +52,10 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
 if __name__ == '__main__':
     token = os.getenv("TELEGRAM_TOKEN")
     if not token:
-        print("ERROR: TELEGRAM_TOKEN not set in environment variables!")
+        print("ERROR: TELEGRAM_TOKEN not set!")
     else:
-        # drop_pending_updates=True clears out "409 Conflict" errors from old sessions
-        app = ApplicationBuilder().token(token).drop_pending_updates(True).build()
+        # Correct way to build the application and set drop_pending_updates
+        app = ApplicationBuilder().token(token).updater_settings(dict(drop_pending_updates=True)).build()
         
         app.add_handler(CommandHandler("start", start))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
